@@ -1,0 +1,74 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DOCKER_HOST: tcp://docker:2375/  # Use Docker-in-Docker
+  DOCKER_DRIVER: overlay2
+
+services:
+  - docker:dind  # Docker-in-Docker for building images and running containers
+
+before_script:
+  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
+
+# 1. Build Stage
+build:
+  stage: build
+  script:
+    # Build and tag each microservice
+    - docker build -t "$DOCKER_USERNAME/category:$CI_COMMIT_SHA" ./services/category
+    - docker build -t "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA" ./services/inventory
+    - docker build -t "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA" ./services/notifications
+    - docker build -t "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA" ./services/product-publisher
+    # Push all images to DockerHub
+    - docker push "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"
+    - docker push "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"
+    - docker push "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"
+    - docker push "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
+
+# 2. Test Stage
+test:
+  stage: test
+  services:
+    - name: docker:dind  # Ensure Docker is available for testing
+  script:
+    # Start the stack defined in docker-compose.yml
+    - docker-compose -f docker-compose.yml up -d
+    - sleep 30  # Wait for services to start
+    # Example health checks
+    - curl -f http://localhost:8282/actuator/health || exit 1
+    - curl -f http://localhost:8181/actuator/health || exit 1
+    - curl -f http://localhost:8383/actuator/health || exit 1
+    - curl -f http://localhost:8484/actuator/health || exit 1
+    # Shut down the stack after tests
+    - docker-compose -f docker-compose.yml down
+
+# 3. Deploy Stage
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying to production..."
+    - docker-compose -f docker-compose.yml up -d
+    # Add deployment steps here (e.g., SSH to your EC2 instance and pull images)
+    - docker pull "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
+
+    # Run instances after pull
+    - docker run -d -p 8282:8080 --name category-container "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"
+    - docker run -d -p 8181:8080 --name inventory-container "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"
+    - docker run -d -p 8383:8080 --name notifications-container "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"
+    - docker run -d -p 8484:8080 --name product-publisher-container "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
+
+    # Ensure the services are linked correctly (if needed) using Docker networks
+    - docker network connect cicd-net category
+    - docker network connect cicd-net inventory
+    - docker network connect cicd-net notifications
+    - docker network connect cicd-net product-publisher
+  tags:
+    - ec2-runner
+  only:
+    - deploy-to-ec2
