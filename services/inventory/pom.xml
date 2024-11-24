@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<nexus.host.url>http://localhost:8085</nexus.host.url>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -72,6 +73,19 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<distributionManagement>
+		<repository>
+			<id>nexus</id>
+			<name>Maven Release Repository</name>
+			<url>${nexus.host.url}/repository/mvn-hosted-rel/</url>
+		</repository>
+		<snapshotRepository>
+			<id>nexus</id>
+			<name>Maven Snapshot Repository</name>
+			<url>${nexus.host.url}/repository/mvn-hosted-snap/</url>
+		</snapshotRepository>
+	</distributionManagement>
 
 	<build>
 		<plugins>
