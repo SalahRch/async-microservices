@@ -13,7 +13,7 @@ stages:
 # 1. Build Stage
 build:
   stage: build
-  image: maven:3.8.6-openjdk-17  # Use the Maven Docker image with OpenJDK
+  image: maven:3.8.2-openjdk-11  # Use the Maven Docker image with OpenJDK
   before_script:
     - mvn --version  # Check Maven version
   script:
