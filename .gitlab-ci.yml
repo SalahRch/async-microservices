@@ -14,6 +14,8 @@ services:
 build:
   stage: build
   script:
+    - docker --version
+    - echo "Logging in to docker ... "
     - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
 
      # Build and package microservices
