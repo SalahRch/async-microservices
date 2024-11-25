@@ -1,14 +1,14 @@
+default:
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker info
+    
 stages:
   - build
   - test
   - deploy
-
-variables:
-  DOCKER_HOST: tcp://docker:2375/  # Use Docker-in-Docker
-  DOCKER_DRIVER: overlay2
-
-services:
-  - docker:dind  # Docker-in-Docker for building images and running containers
 
 # 1. Build Stage
 build:
