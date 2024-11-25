@@ -22,9 +22,6 @@ build_packages:
   script:
     - docker --version
     - docker-compose -f docker-compose.yml up -d kafka mongo nexus sonarqube sonar_db
-    # Step 2: Wait for Nexus to be fully available
-    - echo "Waiting for Nexus to be fully up..."
-    - until curl -s http://localhost:8085; do echo "Waiting for Nexus..."; sleep 5; done
     - mvn --version
     - echo "Building microservices with Maven..."
     # Build and package microservices with Maven
