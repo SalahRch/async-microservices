@@ -1,28 +1,28 @@
-image: docker:24.0.5
-
-services:
-  - docker:24.0.5-dind
-
-variables:
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_DRIVER: overlay2
-
 stages:
   - build
-  - test-category
-  - test-inventory
-  - test-notifications
-  - test-product-publisher
+  - test
   - deploy
 
+variables:
+  DOCKER_HOST: tcp://docker:2375/  # Use Docker-in-Docker
+  DOCKER_DRIVER: overlay2
+
+services:
+  - docker:dind  # Docker-in-Docker for building images and running containers
+
 before_script:
-  - docker info
+  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
 
 # 1. Build Stage
 build:
   stage: build
   script:
-    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
+
+     # Build and package microservices
+    - mvn -f ./services/category/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
+    - mvn -f ./services/inventory/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
+    - mvn -f ./services/notifications/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
+    - mvn -f ./services/product-publisher/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
     # Build and tag each microservice
     - docker build -t "$DOCKER_USERNAME/category:$CI_COMMIT_SHA" ./services/category
     - docker build -t "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA" ./services/inventory
@@ -33,72 +33,52 @@ build:
     - docker push "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"
     - docker push "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"
     - docker push "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
-
-# 2. Test Stage - Category Service
-test-category:
-  stage: test-category
+    
+sonarqube_scan:
+  stage: test
+  image: sonarsource/sonar-scanner-cli:latest
   script:
-    - docker-compose -f docker-compose.yml up -d
-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
-    - mvn test -Dtest=*Category* > category-test.log 2>&1 || echo "Category tests failed!"
-    - cat category-test.log
-  artifacts:
-    paths:
-      - category-test.log
-    expire_in: 1 day
-  after_script:
-    - docker-compose -f docker-compose.yml down
+    - sonar-scanner \
+        -Dsonar.projectKey=category-service \
+        -Dsonar.sources=services/category/src \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN
 
-# 3. Test Stage - Inventory Service
-test-inventory:
-  stage: test-inventory
-  script:
-    - docker-compose -f docker-compose.yml up -d
-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
-    - mvn test -Dtest=*Inventory* > inventory-test.log 2>&1 || echo "Inventory tests failed!"
-    - cat inventory-test.log
-  artifacts:
-    paths:
-      - inventory-test.log
-    expire_in: 1 day
-  after_script:
-    - docker-compose -f docker-compose.yml down
+    - sonar-scanner \
+        -Dsonar.projectKey=inventory-service \
+        -Dsonar.sources=services/inventory/src \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN
 
-# 4. Test Stage - Notifications Service
-test-notifications:
-  stage: test-notifications
-  script:
-    - docker-compose -f docker-compose.yml up -d
-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
-    - mvn test -Dtest=*Notifications* > notifications-test.log 2>&1 || echo "Notifications tests failed!"
-    - cat notifications-test.log
-  artifacts:
-    paths:
-      - notifications-test.log
-    expire_in: 1 day
-  after_script:
-    - docker-compose -f docker-compose.yml down
+    - sonar-scanner \
+        -Dsonar.projectKey=notifications-service \
+        -Dsonar.sources=services/notifications/src \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN
 
-# 5. Test Stage - Product Publisher Service
-test-product-publisher:
-  stage: test-product-publisher
-  script:
-    - docker-compose -f docker-compose.yml up -d
-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
-    - mvn test -Dtest=*ProductPublisher* > product-publisher-test.log 2>&1 || echo "Product Publisher tests failed!"
-    - cat product-publisher-test.log
-  artifacts:
-    paths:
-      - product-publisher-test.log
-    expire_in: 1 day
-  after_script:
-    - docker-compose -f docker-compose.yml down
+    - sonar-scanner \
+        -Dsonar.projectKey=product-publisher \
+        -Dsonar.sources=services/product-publisher/src \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN
+# 2. Test Stage
+#test:
+ # stage: test
+  #services:
+  #  - name: docker:dind  # Ensure Docker is available for testing
+ # script:
+    # Start the stack defined in docker-compose.yml
+    #- docker-compose -f docker-compose.yml up -d
+    #- sleep 30  # Wait for services to start
+    # Example health checks
+    #- curl -f http://localhost:8282/actuator/health || exit 1
+    #- curl -f http://localhost:8181/actuator/health || exit 1
+   # - curl -f http://localhost:8383/actuator/health || exit 1
+    #- curl -f http://localhost:8484/actuator/health || exit 1
+    # Shut down the stack after tests
+  #  - docker-compose -f docker-compose.yml down#
 
-# 6. Deploy Stage
+# 3. Deploy Stage
 deploy:
   stage: deploy
   script:
@@ -117,10 +97,10 @@ deploy:
     - docker run -d -p 8484:8080 --name product-publisher-container "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
 
     # Ensure the services are linked correctly (if needed) using Docker networks
-    - docker network connect cicd-net category-container
-    - docker network connect cicd-net inventory-container
-    - docker network connect cicd-net notifications-container
-    - docker network connect cicd-net product-publisher-container
+    - docker network connect cicd-net category
+    - docker network connect cicd-net inventory
+    - docker network connect cicd-net notifications
+    - docker network connect cicd-net product-publisher
   tags:
     - ec2-runner
   only:
