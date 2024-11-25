@@ -10,13 +10,11 @@ variables:
 services:
   - docker:dind  # Docker-in-Docker for building images and running containers
 
-before_script:
-  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
-
 # 1. Build Stage
 build:
   stage: build
   script:
+    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
 
      # Build and package microservices
     - mvn -f ./services/category/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
