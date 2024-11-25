@@ -9,12 +9,15 @@ variables:
 
 stages:
   - build
-  - test
+  - test-category
+  - test-inventory
+  - test-notifications
+  - test-product-publisher
   - deploy
 
 before_script:
   - docker info
-  -
+
 # 1. Build Stage
 build:
   stage: build
@@ -31,24 +34,71 @@ build:
     - docker push "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"
     - docker push "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
 
-# 2. Test Stage
-test:
-  stage: test
-  services:
-    - name: docker:dind  # Ensure Docker is available for testing
+# 2. Test Stage - Category Service
+test-category:
+  stage: test-category
   script:
-    # Start the stack defined in docker-compose.yml
     - docker-compose -f docker-compose.yml up -d
-    - sleep 30  # Wait for services to start
-    # Example health checks
-    - curl -f http://localhost:8282/actuator/health || exit 1
-    - curl -f http://localhost:8181/actuator/health || exit 1
-    - curl -f http://localhost:8383/actuator/health || exit 1
-    - curl -f http://localhost:8484/actuator/health || exit 1
-    # Shut down the stack after tests
+    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
+    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
+    - mvn test -Dtest=*Category* > category-test.log 2>&1 || echo "Category tests failed!"
+    - cat category-test.log
+  artifacts:
+    paths:
+      - category-test.log
+    expire_in: 1 day
+  after_script:
     - docker-compose -f docker-compose.yml down
 
-# 3. Deploy Stage
+# 3. Test Stage - Inventory Service
+test-inventory:
+  stage: test-inventory
+  script:
+    - docker-compose -f docker-compose.yml up -d
+    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
+    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
+    - mvn test -Dtest=*Inventory* > inventory-test.log 2>&1 || echo "Inventory tests failed!"
+    - cat inventory-test.log
+  artifacts:
+    paths:
+      - inventory-test.log
+    expire_in: 1 day
+  after_script:
+    - docker-compose -f docker-compose.yml down
+
+# 4. Test Stage - Notifications Service
+test-notifications:
+  stage: test-notifications
+  script:
+    - docker-compose -f docker-compose.yml up -d
+    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
+    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
+    - mvn test -Dtest=*Notifications* > notifications-test.log 2>&1 || echo "Notifications tests failed!"
+    - cat notifications-test.log
+  artifacts:
+    paths:
+      - notifications-test.log
+    expire_in: 1 day
+  after_script:
+    - docker-compose -f docker-compose.yml down
+
+# 5. Test Stage - Product Publisher Service
+test-product-publisher:
+  stage: test-product-publisher
+  script:
+    - docker-compose -f docker-compose.yml up -d
+    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"
+    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"
+    - mvn test -Dtest=*ProductPublisher* > product-publisher-test.log 2>&1 || echo "Product Publisher tests failed!"
+    - cat product-publisher-test.log
+  artifacts:
+    paths:
+      - product-publisher-test.log
+    expire_in: 1 day
+  after_script:
+    - docker-compose -f docker-compose.yml down
+
+# 6. Deploy Stage
 deploy:
   stage: deploy
   script:
@@ -67,10 +117,10 @@ deploy:
     - docker run -d -p 8484:8080 --name product-publisher-container "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"
 
     # Ensure the services are linked correctly (if needed) using Docker networks
-    - docker network connect cicd-net category
-    - docker network connect cicd-net inventory
-    - docker network connect cicd-net notifications
-    - docker network connect cicd-net product-publisher
+    - docker network connect cicd-net category-container
+    - docker network connect cicd-net inventory-container
+    - docker network connect cicd-net notifications-container
+    - docker network connect cicd-net product-publisher-container
   tags:
     - ec2-runner
   only:
