@@ -1,26 +1,20 @@
 default:
-  image: docker:24.0.5
+  image: maven:3.8.2-openjdk-11  # Use Maven image
   services:
-    - docker:24.0.5-dind
+    - docker:24.0.5-dind  # Docker-in-Docker service
   before_script:
-    - docker info
+    - docker info  # Ensure Docker is available
+    - mvn --version  # Ensure Maven is available
     
 stages:
   - build
   - test
   - deploy
-
-# 1. Build Stage
 build:
   stage: build
-  image: maven:3.8.2-openjdk-11  # Use the Maven Docker image with OpenJDK
-  before_script:
-    - mvn --version  # Check Maven version
   script:
-    - docker --version
+    - docker --version  # Check Docker version
     - echo "Logging in to docker ... "
-    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
-
      # Build and package microservices
     - mvn -f ./services/category/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
     - mvn -f ./services/inventory/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
