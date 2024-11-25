@@ -1,26 +1,33 @@
 default:
   image: maven:3.8.2-openjdk-11  # Use Maven image
   services:
-    - docker:24.0.5-dind  # Docker-in-Docker service
-  before_script:
-    - docker info  # Ensure Docker is available
-    - mvn --version  # Ensure Maven is available
-    
+    - docker:24.0.5-dind  # Docker-in-Docker service    
 stages:
-  - build
-  - test
+  - build packages
+  - build containers
+  - test 
   - deploy
-build:
-  stage: build
+# Build Packages Stage
+build_packages:
+  stage: build packages
   script:
-    - docker --version  # Check Docker version
-    - echo "Logging in to docker ... "
-     # Build and package microservices
+    - mvn --version
+    - echo "Building microservices with Maven..."
+    # Build and package microservices with Maven
     - mvn -f ./services/category/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
     - mvn -f ./services/inventory/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
     - mvn -f ./services/notifications/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
     - mvn -f ./services/product-publisher/pom.xml clean package deploy -DNEXUS_USER=$NEXUS_USERNAME -DNEXUS_PASSWORD=$NEXUS_PASSWORD
-    # Build and tag each microservice
+
+# Build Containers Stage
+build_containers:
+  stage: build containers
+  image: docker:24.0.5  # Use Docker image for building containers
+  script:
+    - docker --version  # Check Docker version
+    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub
+    - echo "Building Docker containers..."
+    # Build and tag each microservice container
     - docker build -t "$DOCKER_USERNAME/category:$CI_COMMIT_SHA" ./services/category
     - docker build -t "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA" ./services/inventory
     - docker build -t "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA" ./services/notifications
