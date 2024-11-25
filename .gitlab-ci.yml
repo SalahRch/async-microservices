@@ -1,6 +1,6 @@
 
 default:
-  image: maven:3.8.2-openjdk-17  # Use Maven image
+  image: docker:24.0.5
   services:
     - docker:24.0.5-dind  # Docker-in-Docker service    
 
@@ -12,6 +12,9 @@ stages:
 
 # Build Packages Stage
 build_packages:
+  image: maven:3.8.2-openjdk-17
+  services:
+    - docker:24.0.5-dind
   stage: build packages
   script:
     - docker-compose -f docker-compose.yml up -d kafka mongo nexus sonarqube sonar_db
