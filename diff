@@ -1,0 +1,418 @@
+[1mdiff --git a/.gitlab-ci.yml b/.gitlab-ci.yml[m
+[1mindex 493e8f6..6d4445a 100644[m
+[1m--- a/.gitlab-ci.yml[m
+[1m+++ b/.gitlab-ci.yml[m
+[36m@@ -1,127 +1,77 @@[m
+[31m-image: docker:24.0.5[m
+[31m-[m
+[31m-services:[m
+[31m-  - docker:24.0.5-dind[m
+[31m-[m
+[31m-variables:[m
+[31m-  DOCKER_HOST: tcp://docker:2375[m
+[31m-  DOCKER_DRIVER: overlay2[m
+[31m-[m
+[31m-stages:[m
+[31m-  - build[m
+[31m-  - test-category[m
+[31m-  - test-inventory[m
+[31m-  - test-notifications[m
+[31m-  - test-product-publisher[m
+[31m-  - deploy[m
+[31m-[m
+[31m-before_script:[m
+[31m-  - docker info[m
+[31m-[m
+[31m-# 1. Build Stage[m
+[31m-build:[m
+[31m-  stage: build[m
+[31m-  script:[m
+[31m-    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub[m
+[31m-    # Build and tag each microservice[m
+[31m-    - docker build -t "$DOCKER_USERNAME/category:$CI_COMMIT_SHA" ./services/category[m
+[31m-    - docker build -t "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA" ./services/inventory[m
+[31m-    - docker build -t "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA" ./services/notifications[m
+[31m-    - docker build -t "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA" ./services/product-publisher[m
+[31m-    # Push all images to DockerHub[m
+[31m-    - docker push "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[31m-    - docker push "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[31m-    - docker push "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[31m-    - docker push "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[31m-[m
+[31m-# 2. Test Stage - Category Service[m
+[31m-test-category:[m
+[31m-  stage: test-category[m
+[31m-  script:[m
+[31m-    - docker-compose -f docker-compose.yml up -d[m
+[31m-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"[m
+[31m-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"[m
+[31m-    - mvn test -Dtest=*Category* > category-test.log 2>&1 || echo "Category tests failed!"[m
+[31m-    - cat category-test.log[m
+[31m-  artifacts:[m
+[31m-    paths:[m
+[31m-      - category-test.log[m
+[31m-    expire_in: 1 day[m
+[31m-  after_script:[m
+[31m-    - docker-compose -f docker-compose.yml down[m
+[31m-[m
+[31m-# 3. Test Stage - Inventory Service[m
+[31m-test-inventory:[m
+[31m-  stage: test-inventory[m
+[31m-  script:[m
+[31m-    - docker-compose -f docker-compose.yml up -d[m
+[31m-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"[m
+[31m-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"[m
+[31m-    - mvn test -Dtest=*Inventory* > inventory-test.log 2>&1 || echo "Inventory tests failed!"[m
+[31m-    - cat inventory-test.log[m
+[31m-  artifacts:[m
+[31m-    paths:[m
+[31m-      - inventory-test.log[m
+[31m-    expire_in: 1 day[m
+[31m-  after_script:[m
+[31m-    - docker-compose -f docker-compose.yml down[m
+[31m-[m
+[31m-# 4. Test Stage - Notifications Service[m
+[31m-test-notifications:[m
+[31m-  stage: test-notifications[m
+[31m-  script:[m
+[31m-    - docker-compose -f docker-compose.yml up -d[m
+[31m-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"[m
+[31m-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"[m
+[31m-    - mvn test -Dtest=*Notifications* > notifications-test.log 2>&1 || echo "Notifications tests failed!"[m
+[31m-    - cat notifications-test.log[m
+[31m-  artifacts:[m
+[31m-    paths:[m
+[31m-      - notifications-test.log[m
+[31m-    expire_in: 1 day[m
+[31m-  after_script:[m
+[31m-    - docker-compose -f docker-compose.yml down[m
+[31m-[m
+[31m-# 5. Test Stage - Product Publisher Service[m
+[31m-test-product-publisher:[m
+[31m-  stage: test-product-publisher[m
+[31m-  script:[m
+[31m-    - docker-compose -f docker-compose.yml up -d[m
+[31m-    - ./wait-for-it.sh mongo:27017 -- echo "MongoDB is ready"[m
+[31m-    - ./wait-for-it.sh kafka:9092 -- echo "Kafka is ready"[m
+[31m-    - mvn test -Dtest=*ProductPublisher* > product-publisher-test.log 2>&1 || echo "Product Publisher tests failed!"[m
+[31m-    - cat product-publisher-test.log[m
+[31m-  artifacts:[m
+[31m-    paths:[m
+[31m-      - product-publisher-test.log[m
+[31m-    expire_in: 1 day[m
+[31m-  after_script:[m
+[31m-    - docker-compose -f docker-compose.yml down[m
+[31m-[m
+[31m-# 6. Deploy Stage[m
+[31m-deploy:[m
+[31m-  stage: deploy[m
+[31m-  script:[m
+[31m-    - echo "Deploying to production..."[m
+[31m-    - docker-compose -f docker-compose.yml up -d[m
+[31m-    # Add deployment steps here (e.g., SSH to your EC2 instance and pull images)[m
+[31m-    - docker pull "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[31m-    - docker pull "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[31m-    - docker pull "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[31m-    - docker pull "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[31m-[m
+[31m-    # Run instances after pull[m
+[31m-    - docker run -d -p 8282:8080 --name category-container "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[31m-    - docker run -d -p 8181:8080 --name inventory-container "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[31m-    - docker run -d -p 8383:8080 --name notifications-container "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[31m-    - docker run -d -p 8484:8080 --name product-publisher-container "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[31m-[m
+[31m-    # Ensure the services are linked correctly (if needed) using Docker networks[m
+[31m-    - docker network connect cicd-net category-container[m
+[31m-    - docker network connect cicd-net inventory-container[m
+[31m-    - docker network connect cicd-net notifications-container[m
+[31m-    - docker network connect cicd-net product-publisher-container[m
+[31m-  tags:[m
+[31m-    - ec2-runner[m
+[31m-  only:[m
+[31m-    - deploy-to-ec2[m
+[32m+[m[32mimage: docker:24.0.5[m
+[32m+[m
+[32m+[m[32mservices:[m
+[32m+[m[32m  - docker:24.0.5-dind[m
+[32m+[m
+[32m+[m[32mvariables:[m
+[32m+[m[32m  DOCKER_HOST: tcp://docker:2375[m
+[32m+[m[32m  DOCKER_DRIVER: overlay2[m
+[32m+[m
+[32m+[m[32mstages:[m
+[32m+[m[32m  - build[m
+[32m+[m[32m  - test[m
+[32m+[m[32m  - deploy[m
+[32m+[m
+[32m+[m[32mbefore_script:[m
+[32m+[m[32m  - docker info[m
+[32m+[m[32m  -[m
+[32m+[m[32m# 1. Build Stage[m
+[32m+[m[32mbuild:[m
+[32m+[m[32m  stage: build[m
+[32m+[m[32m  script:[m
+[32m+[m[32m    - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"  # Login to DockerHub[m
+[32m+[m[32m    # Build and tag each microservice[m
+[32m+[m[32m    - docker build -t "$DOCKER_USERNAME/category:$CI_COMMIT_SHA" ./services/category[m
+[32m+[m[32m    - docker build -t "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA" ./services/inventory[m
+[32m+[m[32m    - docker build -t "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA" ./services/notifications[m
+[32m+[m[32m    - docker build -t "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA" ./services/product-publisher[m
+[32m+[m[32m    # Push all images to DockerHub[m
+[32m+[m[32m    - docker push "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker push "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker push "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker push "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[32m+[m
+[32m+[m[32m# 2. Test Stage[m
+[32m+[m[32mtest:[m
+[32m+[m[32m  stage: test[m
+[32m+[m[32m  services:[m
+[32m+[m[32m    - name: docker:dind  # Ensure Docker is available for testing[m
+[32m+[m[32m  script:[m
+[32m+[m[32m    # Start the stack defined in docker-compose.yml[m
+[32m+[m[32m    - docker-compose -f docker-compose.yml up -d[m
+[32m+[m[32m    - sleep 30  # Wait for services to start[m
+[32m+[m[32m    # Example health checks[m
+[32m+[m[32m    - curl -f http://localhost:8282/actuator/health || exit 1[m
+[32m+[m[32m    - curl -f http://localhost:8181/actuator/health || exit 1[m
+[32m+[m[32m    - curl -f http://localhost:8383/actuator/health || exit 1[m
+[32m+[m[32m    - curl -f http://localhost:8484/actuator/health || exit 1[m
+[32m+[m[32m    # Shut down the stack after tests[m
+[32m+[m[32m    - docker-compose -f docker-compose.yml down[m
+[32m+[m
+[32m+[m[32m# 3. Deploy Stage[m
+[32m+[m[32mdeploy:[m
+[32m+[m[32m  stage: deploy[m
+[32m+[m[32m  script:[m
+[32m+[m[32m    - echo "Deploying to production..."[m
+[32m+[m[32m    - docker-compose -f docker-compose.yml up -d[m
+[32m+[m[32m    # Add deployment steps here (e.g., SSH to your EC2 instance and pull images)[m
+[32m+[m[32m    - docker pull "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker pull "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker pull "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker pull "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[32m+[m
+[32m+[m[32m    # Run instances after pull[m
+[32m+[m[32m    - docker run -d -p 8282:8080 --name category-container "$DOCKER_USERNAME/category:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker run -d -p 8181:8080 --name inventory-container "$DOCKER_USERNAME/inventory:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker run -d -p 8383:8080 --name notifications-container "$DOCKER_USERNAME/notifications:$CI_COMMIT_SHA"[m
+[32m+[m[32m    - docker run -d -p 8484:8080 --name product-publisher-container "$DOCKER_USERNAME/product-publisher:$CI_COMMIT_SHA"[m
+[32m+[m
+[32m+[m[32m    # Ensure the services are linked correctly (if needed) using Docker networks[m
+[32m+[m[32m    - docker network connect cicd-net category[m
+[32m+[m[32m    - docker network connect cicd-net inventory[m
+[32m+[m[32m    - docker network connect cicd-net notifications[m
+[32m+[m[32m    - docker network connect cicd-net product-publisher[m
+[32m+[m[32m  tags:[m
+[32m+[m[32m    - ec2-runner[m
+[32m+[m[32m  only:[m
+[32m+[m[32m    - deploy-to-ec2[m
+[1mdiff --git a/docker-compose.yml b/docker-compose.yml[m
+[1mindex 69f2458..ee04209 100644[m
+[1m--- a/docker-compose.yml[m
+[1m+++ b/docker-compose.yml[m
+[36m@@ -28,6 +28,44 @@[m [mservices:[m
+       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092[m
+     networks:[m
+       - cicd-net[m
+[32m+[m
+[32m+[m[32m  nexus:[m
+[32m+[m[32m    image: sonatype/nexus3[m
+[32m+[m[32m    restart: always[m
+[32m+[m[32m    volumes:[m
+[32m+[m[32m      - "nexus-data:/sonatype-work"[m
+[32m+[m[32m    ports:[m
+[32m+[m[32m      - "8085:8081"[m
+[32m+[m[32m    networks:[m
+[32m+[m[32m      - cicd-net[m
+[32m+[m
+[32m+[m[32m  sonarqube:[m
+[32m+[m[32m    image: sonarqube:lts-community[m
+[32m+[m[32m    depends_on:[m
+[32m+[m[32m      - sonar_db[m
+[32m+[m[32m    environment:[m
+[32m+[m[32m      SONAR_JDBC_URL: jdbc:postgresql://sonar_db:5432/sonar[m
+[32m+[m[32m      SONAR_JDBC_USERNAME: sonar[m
+[32m+[m[32m      SONAR_JDBC_PASSWORD: sonar[m
+[32m+[m[32m    ports:[m
+[32m+[m[32m      - "9001:9000"[m
+[32m+[m[32m    volumes:[m
+[32m+[m[32m      - sonarqube_conf:/opt/sonarqube/conf[m
+[32m+[m[32m      - sonarqube_data:/opt/sonarqube/data[m
+[32m+[m[32m      - sonarqube_extensions:/opt/sonarqube/extensions[m
+[32m+[m[32m      - sonarqube_logs:/opt/sonarqube/logs[m
+[32m+[m[32m      - sonarqube_temp:/opt/sonarqube/temp[m
+[32m+[m
+[32m+[m[32m  sonar_db:[m
+[32m+[m[32m    image: postgres:13[m
+[32m+[m[32m    environment:[m
+[32m+[m[32m      POSTGRES_USER: sonar[m
+[32m+[m[32m      POSTGRES_PASSWORD: sonar[m
+[32m+[m[32m      POSTGRES_DB: sonar[m
+[32m+[m[32m    volumes:[m
+[32m+[m[32m      - sonar_db:/var/lib/postgresql[m
+[32m+[m[32m      - sonar_db_data:/var/lib/postgresql/data[m
+[32m+[m
+   kafdrop:[m
+     image: obsidiandynamics/kafdrop[m
+     ports:[m
+[36m@@ -38,6 +76,7 @@[m [mservices:[m
+       - kafka[m
+     networks:[m
+       - cicd-net[m
+[32m+[m[41m      [m
+   mongo:[m
+     image: mongo[m
+     ports:[m
+[36m@@ -67,6 +106,8 @@[m [mservices:[m
+     container_name: productpublisher[m
+     depends_on:[m
+       - kafka[m
+[32m+[m[32m    ports:[m
+[32m+[m[32m      - "8484:8080"[m
+     environment:[m
+       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092[m
+       SPRING_DATA_MONGODB_USERNAME: "root"[m
+[36m@@ -142,4 +183,12 @@[m [mnetworks:[m
+     driver: bridge[m
+ [m
+ volumes:[m
+[31m-  mongo:[m
+\ No newline at end of file[m
+[32m+[m[32m  mongo:[m
+[32m+[m[32m  nexus-data: {}[m
+[32m+[m[32m  sonarqube_conf:[m
+[32m+[m[32m  sonarqube_data:[m
+[32m+[m[32m  sonarqube_extensions:[m
+[32m+[m[32m  sonarqube_logs:[m
+[32m+[m[32m  sonarqube_temp:[m
+[32m+[m[32m  sonar_db:[m
+[32m+[m[32m  sonar_db_data:[m
+\ No newline at end of file[m
+[1mdiff --git a/services/category/pom.xml b/services/category/pom.xml[m
+[1mindex a37ce85..fa3a4d6 100644[m
+[1m--- a/services/category/pom.xml[m
+[1m+++ b/services/category/pom.xml[m
+[36m@@ -28,6 +28,7 @@[m
+ 	</scm>[m
+ 	<properties>[m
+ 		<java.version>17</java.version>[m
+[32m+[m		[32m<nexus.host.url>http://localhost:8085</nexus.host.url>[m
+ 	</properties>[m
+ 	<dependencies>[m
+ 		<dependency>[m
+[36m@@ -76,6 +77,19 @@[m
+ 		</dependency>[m
+ 	</dependencies>[m
+ [m
+[32m+[m	[32m<distributionManagement>[m
+[32m+[m		[32m<repository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Release Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-rel/</url>[m
+[32m+[m		[32m</repository>[m
+[32m+[m		[32m<snapshotRepository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Snapshot Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-snap/</url>[m
+[32m+[m		[32m</snapshotRepository>[m
+[32m+[m	[32m</distributionManagement>[m
+[32m+[m
+ 	<build>[m
+ 		<plugins>[m
+ 			<plugin>[m
+[1mdiff --git a/services/inventory/pom.xml b/services/inventory/pom.xml[m
+[1mindex 9117083..b545637 100644[m
+[1m--- a/services/inventory/pom.xml[m
+[1m+++ b/services/inventory/pom.xml[m
+[36m@@ -28,6 +28,7 @@[m
+ 	</scm>[m
+ 	<properties>[m
+ 		<java.version>17</java.version>[m
+[32m+[m		[32m<nexus.host.url>http://localhost:8085</nexus.host.url>[m
+ 	</properties>[m
+ 	<dependencies>[m
+ 		<dependency>[m
+[36m@@ -73,6 +74,19 @@[m
+ 		</dependency>[m
+ 	</dependencies>[m
+ [m
+[32m+[m	[32m<distributionManagement>[m
+[32m+[m		[32m<repository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Release Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-rel/</url>[m
+[32m+[m		[32m</repository>[m
+[32m+[m		[32m<snapshotRepository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Snapshot Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-snap/</url>[m
+[32m+[m		[32m</snapshotRepository>[m
+[32m+[m	[32m</distributionManagement>[m
+[32m+[m
+ 	<build>[m
+ 		<plugins>[m
+ 			<plugin>[m
+[1mdiff --git a/services/notifications/pom.xml b/services/notifications/pom.xml[m
+[1mindex bf56af1..6823bd6 100644[m
+[1m--- a/services/notifications/pom.xml[m
+[1m+++ b/services/notifications/pom.xml[m
+[36m@@ -28,6 +28,7 @@[m
+ 	</scm>[m
+ 	<properties>[m
+ 		<java.version>17</java.version>[m
+[32m+[m		[32m<nexus.host.url>http://localhost:8085</nexus.host.url>[m
+ 	</properties>[m
+ 	<dependencies>[m
+ 		<dependency>[m
+[36m@@ -62,6 +63,19 @@[m
+ 			<artifactId>lombok</artifactId>[m
+ 		</dependency>[m
+ 	</dependencies>[m
+[32m+[m	[32m<distributionManagement>[m
+[32m+[m		[32m<repository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Release Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-rel/</url>[m
+[32m+[m		[32m</repository>[m
+[32m+[m		[32m<snapshotRepository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Snapshot Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-snap/</url>[m
+[32m+[m		[32m</snapshotRepository>[m
+[32m+[m	[32m</distributionManagement>[m
+[32m+[m
+ [m
+ 	<build>[m
+ 		<plugins>[m
+[1mdiff --git a/services/product-publisher/pom.xml b/services/product-publisher/pom.xml[m
+[1mindex 0c6eeb1..a34a37a 100644[m
+[1m--- a/services/product-publisher/pom.xml[m
+[1m+++ b/services/product-publisher/pom.xml[m
+[36m@@ -28,6 +28,7 @@[m
+ 	</scm>[m
+ 	<properties>[m
+ 		<java.version>17</java.version>[m
+[32m+[m		[32m<nexus.host.url>http://localhost:8085</nexus.host.url>[m
+ 	</properties>[m
+ 	<dependencies>[m
+ 		<dependency>[m
+[36m@@ -76,6 +77,18 @@[m
+ 		</dependency>[m
+ 	</dependencies>[m
+ [m
+[32m+[m	[32m<distributionManagement>[m
+[32m+[m		[32m<repository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Release Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-rel/</url>[m
+[32m+[m		[32m</repository>[m
+[32m+[m		[32m<snapshotRepository>[m
+[32m+[m			[32m<id>nexus</id>[m
+[32m+[m			[32m<name>Maven Snapshot Repository</name>[m
+[32m+[m			[32m<url>${nexus.host.url}/repository/mvn-hosted-snap/</url>[m
+[32m+[m		[32m</snapshotRepository>[m
+[32m+[m	[32m</distributionManagement>[m
+ 	<build>[m
+ 		<plugins>[m
+ 			<plugin>[m
