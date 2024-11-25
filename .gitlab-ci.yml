@@ -12,12 +12,13 @@ stages:
 
 # Build Packages Stage
 build_packages:
-  image: maven:3.8.2-openjdk-17
   services:
     - docker:24.0.5-dind
   variables:
     DOCKER_HOST: tcp://docker:2375
   stage: build packages
+  before_script:
+    - apk add --no-cache maven
   script:
     - docker --version
     - docker-compose -f docker-compose.yml up -d kafka mongo nexus sonarqube sonar_db
